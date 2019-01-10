@@ -31,6 +31,27 @@ import eval_metrics
 #     z.backward()
 #     print x.grad
 
+def normalize(x):
+    norm_of_x = torch.norm(x)
+    return x/norm_of_x
+
+def max_min_normalize(x):
+    x_max = np.max(x)
+    x_min = np.min(x)
+    
+    return (x - x_min)/(x_max - x_min)
+
+
+def get_valid_img(img, gradient, thresh = 0.2):
+    valid_img =  np.zeros_like(img)
+    valid_gradient = np.zeros_like(gradient)
+    for m in range(gradient.shape[0]):
+        for n in range(gradient.shape[1]):
+            if gradient[m][n] > thresh:
+                valid_img[m][n] = img[m][n]
+                valid_gradient[m][n] = gradient[m][n]
+    return valid_img,valid_gradient
+
 
 def get_args():
     parser = OptionParser()
@@ -75,6 +96,8 @@ def get_args():
 
     parser.add_option('--input_size',dest = 'input_size',default = 256,type = 'int',help = 'input size')
 
+    parser.add_option('--patch', action='store_true', dest='patch', default=False, help='patch analysis')
+
     (options, args) = parser.parse_args()
 
     return options
@@ -82,24 +105,102 @@ def get_args():
 def eval_net(net = None, gpu = True, config = {}):
     #----------------------random choose two pictures-------------------#
     
-    data1 = Variable(torch.from_numpy(data).cuda(),required_grad = True)
-    label1 = torch.from_numpy(label).cuda()
-    output_cuda = net(input_data,mode = 'test')
-    feature = output_cuda.cpu().numpy()
-    norm_feature1 = normalize(feature)
+    while 1:
+        if config['patch']:
+            img1,img2,filename1,filename2,label = config['eval_dset'].gradient_sample_for_patch()
+            criterion = nn.MSELoss()
+            label = torch.from_numpy(label).cuda()
 
-    data2 = Variable(torch.from_numpy(data).cuda(),required_grad = True)
-    label2 = torch.from_numpy(label).cuda()
-    output_cuda = net(input_data,mode = 'test')
-    feature = output_cuda.cpu().numpy()
-    norm_feature2 = normalize(feature)
+            data1 = Variable(torch.from_numpy(img1).cuda(),requires_grad = True)
+            output_cuda,pred1 = net(data1,label,mode = 'test',pred = True)
+            norm_feature1 = normalize(output_cuda)
 
-    loss = nn.MSELoss(norm_feature1, norm_feature2)
+            data2 = Variable(torch.from_numpy(img2).cuda(),requires_grad = True)
+            output_cuda,pred2 = net(data2,label,mode = 'test',pred = True)
+            norm_feature2 = normalize(output_cuda)
 
-    loss.backward()
-    
-    gradientofdata2 = data2.grad
-    
+            loss = criterion(norm_feature1, norm_feature2)
+
+            loss.backward()
+
+            print "loss: ",loss
+
+            pred1 = np.squeeze(pred1.data.cpu().numpy())
+            index1 = np.where(pred1 == np.max(pred1))
+
+            pred2 = np.squeeze(pred2.data.cpu().numpy())
+            index2 = np.where(pred2 == np.max(pred2))
+
+            print "Ground Truth: ",label.cpu().numpy()
+            print "Original Image pred: ",index1[0][0]
+            print "Patch Image pred: ",index2[0][0]
+
+            gradientofdata2 = max_min_normalize(np.abs((data2.grad).cpu().numpy()))
+            print gradientofdata2.shape
+        else:
+            img1,img2,filename1,filename2 = config['eval_dset'].gradient_sample_for_ND()
+            criterion = nn.MSELoss()
+
+            data1 = Variable(torch.from_numpy(img1).cuda(),requires_grad = True)
+            output_cuda = net(data1,mode = 'test')
+            norm_feature1 = normalize(output_cuda)
+
+            data2 = Variable(torch.from_numpy(img2).cuda(),requires_grad = True)
+            output_cuda = net(data2,mode = 'test')
+            norm_feature2 = normalize(output_cuda)
+
+            loss = criterion(norm_feature1, norm_feature2)
+
+            loss.backward()
+            
+            gradientofdata2 = max_min_normalize(np.abs((data2.grad).cpu().numpy()))
+
+            valid_img2,valid_gradient2 = get_valid_img(np.squeeze(img2),np.squeeze(gradientofdata2), thresh = 0.1)
+
+            print "loss: ",loss
+
+            print gradientofdata2.shape
+        
+        if config['patch']:
+            plt.subplot(131)
+            plt.title("Original Img")
+            plt.imshow(np.squeeze(img1))
+
+            plt.subplot(132)
+            plt.title("After adding patch")
+            plt.imshow(np.squeeze(img2))
+            
+            plt.subplot(133)
+            plt.title("Gradient Image")
+            plt.imshow(np.squeeze(gradientofdata2))
+
+            plt.suptitle(filename1)
+            plt.show()
+        else:
+            plt.subplot(231)
+            plt.title("Gradient Image")
+            plt.imshow(np.squeeze(gradientofdata2))
+
+            plt.subplot(232)
+            plt.title("Original Img")
+            plt.imshow(np.squeeze(img2))
+
+
+            plt.subplot(233)
+            plt.title("Valid Gradient")
+            plt.imshow(valid_gradient2)
+
+            plt.subplot(234)
+            plt.title("Valid Image")
+            plt.imshow(valid_img2)
+
+            plt.subplot(235)
+            plt.title("Image Difference")
+            plt.imshow(np.squeeze(img1 - img2))
+
+
+            plt.suptitle(filename1 + " " + filename2)
+            plt.show()            
 
 
 
@@ -120,7 +221,7 @@ def main():
 
 
     config = {}
-    config['train_dset'] = TRAIN_DST
+    config['eval_dset'] = TEST_DST
     config['max_iter'] = args.max_iter
     config['snapshot'] = args.snapshot
     config['display'] = args.display
@@ -135,6 +236,7 @@ def main():
     config['input_size'] = args.input_size
     config['in_ch'] = args.in_ch
     config['net'] = NET
+    config['patch'] = args.patch
 
 
     eval_net(net = NET, gpu = args.gpu, config = config)

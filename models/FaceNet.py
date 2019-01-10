@@ -46,7 +46,7 @@ class FaceNet(nn.Module):
         elif metric == 'Linear' :
             self.metric_fc = nn.Linear(512, num_classes)
 
-    def forward(self, data, label = None,mode = 'train'):
+    def forward(self, data, label = None,mode = 'train',pred = False):
         if mode == 'train':
             if self.large_conv:
                 conv1 = self.conv1(data)
@@ -65,7 +65,15 @@ class FaceNet(nn.Module):
                 conv1 = self.conv1(data)
                 conv2 = self.conv2(conv1)
                 feature = self.FRNet(conv2)
-                return feature
+                if pred:
+                    output = self.metric_fc(feature,label)
+                    return feature,output
+                else:
+                    return feature  
             else:
                 feature = self.FRNet(data)
-                return feature
+                if pred:
+                    output = self.metric_fc(feature,label)
+                    return feature,output
+                else:
+                    return feature  

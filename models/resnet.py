@@ -242,7 +242,7 @@ class ResNet(nn.Module):
         
         # self.fc5 = nn.Linear(512 * 8 * 8, 512)
         # self.fc5 = nn.Linear(512 * 12 * 12, 512)
-        self.fc5 = nn.Linear(512 * 16 * 16, 512)
+        self.fc5 = nn.Linear(512 * 14 * 14, 512)
         for m in self.modules():
             if isinstance(m, nn.Conv2d):
                 nn.init.kaiming_normal_(m.weight, mode='fan_out', nonlinearity='relu')

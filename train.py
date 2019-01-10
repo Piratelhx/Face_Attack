@@ -20,10 +20,12 @@ from utils import FaceDataset
 import eval_metrics
 import matplotlib.pyplot as plt
 
-import os
-os.environ["CUDA_VISIBLE_DEVICES"] = "1"
 
 
+def log_string(LOG_FOUT, out_str):
+    LOG_FOUT.write(out_str+'\n')
+    LOG_FOUT.flush()
+    print(out_str)
 
 def get_args():
     parser = OptionParser()
@@ -68,14 +70,17 @@ def get_args():
 
     parser.add_option('--input_size',dest = 'input_size',default = 256,type = 'int',help = 'input size')
 
+    parser.add_option('--test_iter', dest='test_iter', default=8,type='int', help='test iter')
+
     (options, args) = parser.parse_args()
 
     
     return options
 
-def train_net(net, gpu=False, config={}):
+def train_net(net, gpu=False, config={}, LOG_FOUT = None):
     
     try:
+
         RES = 0
         BEST_RES = 0
 
@@ -96,7 +101,7 @@ def train_net(net, gpu=False, config={}):
 
         for iter_ in range(config['train_start_index'], config['max_iter']):
             
-            buff = FRDATASET.next_batch(data_augmentation = False)
+            buff = FRDATASET.next_batch(data_augmentation = True)
 
             data = buff['data']
             label = buff['label']
@@ -118,30 +123,31 @@ def train_net(net, gpu=False, config={}):
                 if RES > BEST_RES:
                     BEST_RES = RES
                     torch.save(net.state_dict(), os.path.join(config['model_path'], 'model_best.pth'))
-                    print('Utill now the best result is {}'.format(BEST_RES))
+                    log_string(LOG_FOUT, 'Model Saved!!!Utill now the best result is {}'.format(BEST_RES))
             
             
             if (iter_ + 1) % config['display'] == 0:
                 time_end = time.time()    
                 time_cost = time_end - time_start
-                print ('iter: {} time: {}s lr: {} avg_loss: {} '.format(iter_ + 1, time_cost, config['lr'], loss_count / config['display']))
-                RES = eval_metrics.eval_data_BOS(config)
-                print('Result is {}'.format(RES))
+                log_string(LOG_FOUT, 'iter: {} time: {}s lr: {} avg_loss: {} '.format(iter_ + 1, time_cost, config['lr'], loss_count / config['display']))
                 loss_count = 0
                 time_start = time.time()
+            
+            if (iter_ + 1) % config['test_iter'] == 0:
+                RES = eval_metrics.eval_data_BOS(config)
 
-            if (iter_ + 1) % config['step_size'] == 0:
+            if (iter_ + 1) * config['batch_size'] % config['step_size'] == 0:
                 if config['optim'] == 'SGD':
                     optimizer = optim.SGD(net.parameters(), lr=config['lr'] * config['gamma'], momentum=0.9, weight_decay=0.0005)
                     config['lr'] = config['lr'] * config['gamma']
                 if config['optim'] == 'Adam':
-                    optimizer = optim.Adam(net.parameters(), lr = config['lr'] * 0.1, weight_decay = 0.00005)  
+                    optimizer = optim.Adam(net.parameters(), lr = config['lr'] * config['gamma'], weight_decay = 0.00005)  
                     config['lr'] = config['lr'] * config['gamma']
             
 
     except KeyboardInterrupt:
-        torch.save(net.state_dict(), os.path.join(args.model_path,'CP{}.pth'.format(iter_ + 1)))
-        print('Saved interrupt pth: ','CP{}.pth'.format(iter_ + 1))
+        torch.save(net.state_dict(), os.path.join(config['model_path'],'CP{}.pth'.format(iter_ + 1)))
+        log_string(LOG_FOUT, 'Saved interrupt pth: CP{}.pth'.format(iter_ + 1))
         try:
             sys.exit(0)
         except SystemExit:
@@ -149,6 +155,7 @@ def train_net(net, gpu=False, config={}):
 
 def main():
     args = get_args()
+    LOG_FOUT = open(os.path.join(args.model_path, 'log_train.txt'), 'a')
 
     if not os.path.exists(args.model_path):
         os.makedirs(args.model_path)
@@ -160,7 +167,7 @@ def main():
 
     if args.restore:
         NET.load_state_dict(torch.load(args.load))
-        print('Model Restored from {}'.format(args.load))
+        log_string(LOG_FOUT, 'Model Restored from {}'.format(args.load))
 
     if args.gpu:
         NET.cuda()
@@ -182,8 +189,12 @@ def main():
     config['input_size'] = args.input_size
     config['in_ch'] = args.in_ch
     config['net'] = NET
+    config['test_iter'] = args.test_iter
 
-    train_net(net = NET, gpu = args.gpu, config = config)
+    
+    LOG_FOUT.write(str(config)+'\n')
+
+    train_net(net = NET, gpu = args.gpu, config = config, LOG_FOUT = LOG_FOUT)
 
 
 if __name__ == '__main__':

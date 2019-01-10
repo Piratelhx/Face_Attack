@@ -17,10 +17,10 @@ from utils import SequenceDataset
 from utils import FaceDataset
 import eval_functions
 
-TEST_DATASET_H5PY_DIR = "/home/lhx/xiaozl/test_ND/ND_total_depthmap_13450.hdf5"
-TEST_DATASET_GALLERY_JSON_DIR = "/home/lhx/xiaozl/test_ND/ND_total_depthmap_13450.json"
-TEST_DATASET_PROBE_NEUTRAL_JSON_DIR = "/home/lhx/xiaozl/test_ND/ND_total_depthmap_13450.json"
-TEST_DATASET_FRONTIAL_JSON_DIR = "/home/lhx/xiaozl/test_ND/ND_total_depthmap_13450.json"
+TEST_DATASET_H5PY_DIR = "/media/lhx/lhx/depthmap_hdf5/Bos_depthmap.hdf5"
+TEST_DATASET_GALLERY_JSON_DIR = "/media/lhx/lhx/depthmap_hdf5/json/Bos/gallery.json"
+TEST_DATASET_PROBE_NEUTRAL_JSON_DIR = "/media/lhx/lhx/depthmap_hdf5/json/Bos/probe_neutral.json"
+TEST_DATASET_FRONTIAL_JSON_DIR = "/media/lhx/lhx/depthmap_hdf5/json/Bos/frontial.json"
 
 
 def normalize(x):
@@ -103,6 +103,7 @@ def eval_data_BOS(config):
             
 
     while FRONTIAL_DST.has_next_batch():
+        
         buff = FRONTIAL_DST.get_batch_samples()
         data = buff["data"]
         label = buff['label']

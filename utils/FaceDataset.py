@@ -5,7 +5,7 @@ import random
 import json
 import cv2
 
-def add_patch(img, max_patch_num = 6,max_patch_size = 20):
+def add_patch(img, max_patch_num = 8,max_patch_size = 20):
     random_point_num = np.random.randint(max_patch_num)
     # plt.subplot(121)
     # plt.imshow(img.copy())
@@ -19,6 +19,17 @@ def add_patch(img, max_patch_num = 6,max_patch_size = 20):
                 img[random_point_row+m,random_point_col+n] = 0
     
     return img
+
+def add_fixed_size_patch(img,patch_num = 1,patch_size = 21, random_point_row = 112, random_point_col = 112):
+    for i in range(patch_num):
+        tmp = (patch_size - 1)/2
+        # random_point_row = np.random.randint(tmp ,img.shape[0]-tmp)
+        # random_point_col = np.random.randint(tmp + 50,img.shape[1]-tmp - 50)
+        for m in range(-tmp,tmp):
+            for n in range(-tmp,tmp):
+                img[random_point_row+m,random_point_col+n] = 0
+        print random_point_row, random_point_col ##row vertical col horizontal
+    return img 
 
 class FaceDataset():
 
@@ -57,13 +68,18 @@ class FaceDataset():
             img = np.asarray(self.file[filename][img_index]) 
            
             if data_augmentation: 
-                data[i] = add_patch(img)
+                data[i] = add_patch(img)              
             else:
-                for ch in range(self.in_ch):
-                    data[i,ch,:] = img
-            
+                data[i] = img
+ 
             label[i] = self.anno[self.idx]['label']
+            
+            # plt.imshow(data[i,0])
+            # plt.title(label[i])
+            # plt.show()
+
             self.idx += 1
+        
         buff = {}
         buff['data'] = data
         buff['label'] = label
@@ -99,3 +115,44 @@ class FaceDataset():
 
     def return_length(self):
         return self.length
+    
+
+    def gradient_sample_for_ND(self):
+        img1 = np.zeros((self.batch_size, self.in_ch, self.input_size, self.input_size), dtype = np.float32)
+        img2 = np.zeros((self.batch_size, self.in_ch, self.input_size, self.input_size), dtype = np.float32)
+
+        while 1:
+            index1 = random.randint(0, self.length - 1)
+            index2 = random.randint(0, self.length - 1)
+
+            filename1 = self.anno[index1]['filename']
+            filename2 = self.anno[index2]['filename']
+
+            id1 = filename1[filename1.find("_") + 1:filename1.find("d")]
+            id2 = filename2[filename2.find("_") + 1:filename2.find("d")]
+
+            if id1 == id2:
+                break
+        
+
+        img1[0] = np.asarray(self.file[filename1][0]) 
+        img2[0] = np.asarray(self.file[filename2][0]) 
+
+        return img1,img2,filename1,filename2
+
+    def gradient_sample_for_patch(self):
+        img1 = np.zeros((self.batch_size, self.in_ch, self.input_size, self.input_size), dtype = np.float32)
+        label = np.zeros(self.batch_size, dtype = np.int64)
+        index1 = random.randint(0, self.length - 1)
+        filename1 = self.anno[index1]['filename']
+        img1[0] = np.asarray(self.file[filename1][0]) 
+
+        img2 = np.zeros((self.batch_size, self.in_ch, self.input_size, self.input_size), dtype = np.float32)
+        img2[0] = add_fixed_size_patch(np.asarray(self.file[filename1][0]),patch_num = 1,patch_size = 100)
+
+        # print np.sum(img1)
+        # print np.sum(img2)
+        label[0] = self.anno[index1]['label']
+        return img1,img2,filename1,filename1,label
+    
+
